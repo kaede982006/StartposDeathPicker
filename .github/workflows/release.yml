@@ -78,10 +78,11 @@ jobs:
             exit 1
           fi
 
-          gh release delete v3.0.0 --yes --cleanup-tag || true
-          gh api -X DELETE "repos/${REPOSITORY}/git/refs/tags/v3.0.0" || true
+          gh release delete v3.0.0 --repo "${REPOSITORY}" --yes --cleanup-tag || true
+          gh api --method DELETE "repos/${REPOSITORY}/git/refs/tags/v3.0.0" >/dev/null 2>&1 || true
 
           gh release create v3.0.0 "${geode_files[@]}" \
+            --repo "${REPOSITORY}" \
             --target "${TARGET_SHA}" \
             --title "v3.0.0" \
             --notes "GitHub Actions-built release for HDeathTracker 3.0.0."
