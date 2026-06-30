@@ -23,11 +23,9 @@ namespace {
 constexpr int START_POS_ID = 31;
 // The size of the histogram. Records death rates from 0% to 99% in 1% increments, so it uses 100 slots.
 constexpr int HISTOGRAM_SIZE = 100;
-// Immediately after changing the start position, the character may not be properly positioned, which can lead to instant deaths.
-// A grace period of frames (about 0.1 seconds, 6 frames at 60fps) is set to prevent this.
-constexpr int START_POS_CHANGE_GRACE_FRAMES = 6;
+constexpr int START_POS_CHANGE_GRACE_FRAMES = 1;
 // The number of suppression frames to prevent duplicate death recordings that occur simultaneously or at very short intervals. (Duplicate death prevention)
-constexpr int DUPLICATE_DEATH_SUPPRESS_FRAMES = 10;
+constexpr int DUPLICATE_DEATH_SUPPRESS_FRAMES = 1;
 // The distance penalty value applied when a mismatch (deletion/insertion) occurs in the alignment algorithm
 // when the previous start position list does not match the current list due to level edits.
 // Simply put, this adjusts the death records accordingly when start positions change.
