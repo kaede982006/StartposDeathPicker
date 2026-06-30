@@ -46,6 +46,8 @@ jobs:
     steps:
       - uses: geode-sdk/build-geode-mod/combine@main
         id: build
+        with:
+          delete-artifacts: false
 
       - uses: actions/upload-artifact@v4
         with:
