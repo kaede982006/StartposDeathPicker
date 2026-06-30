@@ -24,7 +24,8 @@ constexpr int HISTOGRAM_SIZE = 100;
 constexpr int START_POS_CHANGE_GRACE_FRAMES = 20;
 constexpr int DUPLICATE_DEATH_SUPPRESS_FRAMES = 10;
 constexpr float START_POS_MATCH_SKIP_PENALTY = 300.f;
-constexpr char const* POPUP_NODE_ID = "hyobeen.hdeathtracker/death-stats-popup";
+constexpr char const* POPUP_NODE_ID = "hyobeen.startpos-death-picker/death-stats-popup";
+constexpr char const* DATA_FILE_MAGIC = "SDP1";
 
 using Histogram = std::vector<int>;
 
@@ -61,24 +62,6 @@ struct TrackerData {
     std::vector<Histogram> startHists;
 };
 
-void saveTrackerData(GJGameLevel* level, TrackerData const& data);
-
-std::string levelKey(GJGameLevel* level) {
-    if (!level) return "unknown";
-
-    auto id = static_cast<int>(level->m_levelID.value());
-    auto original = static_cast<int>(level->m_originalLevel.value());
-    return fmt::format("{}:{}:{}:{}", id, original, level->m_M_ID, std::string(level->m_levelName));
-}
-
-std::string legacyLevelKey(GJGameLevel* level) {
-    if (!level) return "unknown";
-
-    auto id = static_cast<int>(level->m_levelID.value());
-    auto original = static_cast<int>(level->m_originalLevel.value());
-    return fmt::format("{}:{}:{}", id, original, std::string(level->m_levelName));
-}
-
 uint64_t stableHash(std::string_view text) {
     uint64_t hash = 14695981039346656037ull;
     for (auto ch : text) {
@@ -108,25 +91,6 @@ std::string stableLevelKey(GJGameLevel* level) {
 
 std::filesystem::path trackerDataPath(GJGameLevel* level) {
     return Mod::get()->getSaveDir() / "death-data" / (stableLevelKey(level) + ".txt");
-}
-
-bool hasTrackerData(Mod* mod, std::string const& key) {
-    return mod->hasSavedValue(key + ".total-hist") ||
-        mod->hasSavedValue(key + ".start-hists") ||
-        mod->hasSavedValue(key + ".start-xs") ||
-        mod->hasSavedValue(key + ".total") ||
-        mod->hasSavedValue(key + ".start-counts");
-}
-
-std::string readLevelKey(GJGameLevel* level) {
-    auto mod = Mod::get();
-    auto key = levelKey(level);
-    if (hasTrackerData(mod, key)) return key;
-
-    auto legacy = legacyLevelKey(level);
-    if (hasTrackerData(mod, legacy)) return legacy;
-
-    return key;
 }
 
 Histogram normalizeHistogram(Histogram hist) {
@@ -345,8 +309,6 @@ std::vector<Histogram> alignStartHistograms(
 }
 
 TrackerData loadTrackerData(GJGameLevel* level, std::vector<float> currentStarts) {
-    auto mod = Mod::get();
-    auto key = readLevelKey(level);
     auto path = trackerDataPath(level);
 
     if (std::ifstream file(path); file) {
@@ -354,7 +316,7 @@ TrackerData loadTrackerData(GJGameLevel* level, std::vector<float> currentStarts
         size_t count = 0;
 
         TrackerData fileData;
-        if (file >> token && token == "HDT2" &&
+        if (file >> token && token == DATA_FILE_MAGIC &&
             file >> token && token == "START_XS" &&
             file >> count
         ) {
@@ -390,23 +352,21 @@ TrackerData loadTrackerData(GJGameLevel* level, std::vector<float> currentStarts
             }
         }
 
-        log::warn("Ignoring malformed death tracker data file: {}", path.string());
-    }
-
-    auto oldXs = mod->getSavedValue<std::vector<float>>(key + ".start-xs");
-    auto oldStartHists = mod->getSavedValue<std::vector<Histogram>>(key + ".start-hists");
-    if (currentStarts.empty() && !oldXs.empty()) {
-        currentStarts = oldXs;
+        log::warn("Ignoring malformed Startpos Death Picker data file: {}", path.string());
     }
 
     TrackerData data;
-    data.startXs = currentStarts;
-    data.totalHist = normalizeHistogram(mod->getSavedValue<Histogram>(key + ".total-hist"));
-    data.startHists = alignStartHistograms(oldXs, oldStartHists, currentStarts);
-    if (std::accumulate(data.totalHist.begin(), data.totalHist.end(), 0) > 0 || !data.startHists.empty()) {
-        saveTrackerData(level, data);
-    }
+    data.startXs = std::move(currentStarts);
+    data.totalHist.assign(HISTOGRAM_SIZE, 0);
+    data.startHists.assign(data.startXs.size(), Histogram(HISTOGRAM_SIZE, 0));
     return data;
+}
+
+void writeHistogram(std::ofstream& file, Histogram const& hist) {
+    for (auto i = 0; i < HISTOGRAM_SIZE; ++i) {
+        auto value = i < hist.size() ? hist[i] : 0;
+        file << ' ' << std::max(value, 0);
+    }
 }
 
 void saveTrackerData(GJGameLevel* level, TrackerData const& data) {
@@ -414,25 +374,25 @@ void saveTrackerData(GJGameLevel* level, TrackerData const& data) {
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
     if (ec) {
-        log::warn("Failed to create death tracker data directory: {}", ec.message());
+        log::warn("Failed to create Startpos Death Picker data directory: {}", ec.message());
         return;
     }
 
     std::ofstream file(path, std::ios::trunc);
     if (!file) {
-        log::warn("Failed to open death tracker data file: {}", path.string());
+        log::warn("Failed to open Startpos Death Picker data file: {}", path.string());
         return;
     }
 
-    file << "HDT2\n";
+    file << DATA_FILE_MAGIC << '\n';
     file << "START_XS " << data.startXs.size();
     for (auto value : data.startXs) file << ' ' << value;
     file << "\nTOTAL";
-    for (auto value : normalizeHistogram(data.totalHist)) file << ' ' << value;
+    writeHistogram(file, data.totalHist);
     file << "\nSTART_HISTS " << data.startHists.size() << '\n';
-    for (auto hist : data.startHists) {
+    for (auto const& hist : data.startHists) {
         file << "HIST";
-        for (auto value : normalizeHistogram(std::move(hist))) file << ' ' << value;
+        writeHistogram(file, hist);
         file << '\n';
     }
 }
@@ -522,7 +482,7 @@ protected:
             m_closeBtn->removeFromParentAndCleanup(true);
             m_closeBtn = nullptr;
         }
-        this->setTitle("Death Tracker", "goldFont.fnt", .55f, 18.f);
+        this->setTitle("Startpos Death Picker", "goldFont.fnt", .55f, 18.f);
 
         auto starts = collectStartPositionsFromLevelString(level);
         m_data = loadTrackerData(level, starts);
@@ -701,7 +661,7 @@ int deathPercentBucket(PlayLayer* layer, float deathX) {
 }
 }
 
-class $modify(HDeathTrackerPlayLayer, PlayLayer) {
+class $modify(StartposDeathPickerPlayLayer, PlayLayer) {
     struct Fields {
         bool deathRecorded = false;
         int lastRecordedAttempt = -1;
@@ -811,7 +771,7 @@ class $modify(HDeathTrackerPlayLayer, PlayLayer) {
     }
 };
 
-class $modify(HDeathTrackerLevelInfoLayer, LevelInfoLayer) {
+class $modify(StartposDeathPickerLevelInfoLayer, LevelInfoLayer) {
     bool init(GJGameLevel* level, bool challenge) {
         if (!LevelInfoLayer::init(level, challenge)) return false;
 
@@ -828,7 +788,7 @@ class $modify(HDeathTrackerLevelInfoLayer, LevelInfoLayer) {
     }
 };
 
-class $modify(HDeathTrackerEditLevelLayer, EditLevelLayer) {
+class $modify(StartposDeathPickerEditLevelLayer, EditLevelLayer) {
     bool init(GJGameLevel* level) {
         if (!EditLevelLayer::init(level)) return false;
 

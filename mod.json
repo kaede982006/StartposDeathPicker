@@ -6,11 +6,11 @@
 		"ios": "2.2081",
 		"android": "2.2081"
 	},
-	"id": "hyobeen.hdeathtracker",
-	"name": "HDeathTracker",
-	"version": "3.0.0",
+	"id": "hyobeen.startpos-death-picker",
+	"name": "Startpos Death Picker",
+	"version": "1.0.0",
 	"developer": "Hyobeen",
-	"description": "A lightweight death tracker",
+	"description": "A lightweight startpos death picker",
 	"dependencies": {
 		"geode.node-ids": ">=v1.23.3"
 	}
