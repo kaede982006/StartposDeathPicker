@@ -1,14 +1,11 @@
 {
 	"geode": "5.7.1",
 	"gd": {
-		"win": "2.2081",
-		"mac": "2.2081",
-		"ios": "2.2081",
-		"android": "2.2081"
+		"win": "2.2081"
 	},
 	"id": "hyobeen.hdeathtracker",
 	"name": "HDeathTracker",
-	"version": "v2.1.0",
+	"version": "v2.2.0",
 	"developer": "Hyobeen",
 	"description": "A lightweight death tracker",
 	"dependencies": {
