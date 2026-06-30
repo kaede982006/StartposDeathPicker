@@ -22,6 +22,7 @@ namespace {
 constexpr int START_POS_ID = 31;
 constexpr int HISTOGRAM_SIZE = 100;
 constexpr int START_POS_CHANGE_GRACE_FRAMES = 20;
+constexpr int DUPLICATE_DEATH_SUPPRESS_FRAMES = 10;
 constexpr float START_POS_MATCH_SKIP_PENALTY = 300.f;
 constexpr char const* POPUP_NODE_ID = "hyobeen.hdeathtracker/death-stats-popup";
 
@@ -703,6 +704,8 @@ int deathPercentBucket(PlayLayer* layer, float deathX) {
 class $modify(HDeathTrackerPlayLayer, PlayLayer) {
     struct Fields {
         bool deathRecorded = false;
+        int lastRecordedAttempt = -1;
+        int duplicateDeathSuppressFrames = 0;
         int startPosChangeFrames = 0;
         StartPosObject* lastStartPosObject = nullptr;
     };
@@ -711,6 +714,8 @@ class $modify(HDeathTrackerPlayLayer, PlayLayer) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
 
         m_fields->deathRecorded = false;
+        m_fields->lastRecordedAttempt = -1;
+        m_fields->duplicateDeathSuppressFrames = 0;
         m_fields->startPosChangeFrames = 0;
         m_fields->lastStartPosObject = m_startPosObject;
         return true;
@@ -725,6 +730,10 @@ class $modify(HDeathTrackerPlayLayer, PlayLayer) {
         }
         else if (m_fields->startPosChangeFrames > 0) {
             m_fields->startPosChangeFrames -= 1;
+        }
+
+        if (m_fields->duplicateDeathSuppressFrames > 0) {
+            m_fields->duplicateDeathSuppressFrames -= 1;
         }
     }
 
@@ -748,7 +757,9 @@ class $modify(HDeathTrackerPlayLayer, PlayLayer) {
             m_fields->startPosChangeFrames > 0;
         auto shouldTrack =
             !shouldIgnoreStartPosNavigation &&
+            m_fields->duplicateDeathSuppressFrames == 0 &&
             !m_fields->deathRecorded &&
+            m_fields->lastRecordedAttempt != m_attempts &&
             player &&
             !player->m_isDead &&
             m_player1 &&
@@ -758,6 +769,12 @@ class $modify(HDeathTrackerPlayLayer, PlayLayer) {
         auto percent = deathPercentBucket(this, deathX);
         auto activeStart = m_startPosObject;
 
+        if (shouldTrack) {
+            m_fields->deathRecorded = true;
+            m_fields->lastRecordedAttempt = m_attempts;
+            m_fields->duplicateDeathSuppressFrames = DUPLICATE_DEATH_SUPPRESS_FRAMES;
+        }
+
         PlayLayer::destroyPlayer(player, object);
 
         if (shouldIgnoreStartPosNavigation) {
@@ -765,7 +782,6 @@ class $modify(HDeathTrackerPlayLayer, PlayLayer) {
             m_fields->lastStartPosObject = m_startPosObject;
         }
         if (!shouldTrack) return;
-        m_fields->deathRecorded = true;
 
         auto startObjects = collectStartObjects(m_objects);
         auto starts = startPositionsFromObjects(startObjects);

@@ -5,7 +5,7 @@
 	},
 	"id": "hyobeen.hdeathtracker",
 	"name": "HDeathTracker",
-	"version": "v2.2.0",
+	"version": "v2.2.1",
 	"developer": "Hyobeen",
 	"description": "A lightweight death tracker",
 	"dependencies": {
